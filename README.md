@@ -9,10 +9,10 @@ audio, merged into one MP4).
 
 No Python, no ffmpeg, no terminal. One file.
 
-1. Go to the **[Releases page](../../releases/latest)**.
-2. Under **Assets**, download **`YouTube-Max-Downloader.exe`**.
-3. **Double-click it.** A small window opens.
-4. Paste a YouTube link, click **Download**. Done — the video lands in your
+1. **[⬇ Download YouTube-Max-Downloader.exe](https://github.com/ahksm/ultra-max-quality-youtube-download-bot/releases/download/latest/YouTube-Max-Downloader.exe)**
+   (or browse the [Releases page](https://github.com/ahksm/ultra-max-quality-youtube-download-bot/releases/tag/latest) and grab it under **Assets**).
+2. **Double-click it.** A small window opens.
+3. Paste a YouTube link, click **Download**. Done — the video lands in your
    **Downloads** folder.
 
 > **First time you run it, Windows may say "Windows protected your PC."**

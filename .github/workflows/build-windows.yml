@@ -69,6 +69,7 @@ jobs:
             Windows may show a SmartScreen warning the first time
             ("Windows protected your PC"). Click **More info → Run anyway**.
           files: dist/YouTube-Max-Downloader.exe
-          prerelease: true
+          prerelease: false
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
