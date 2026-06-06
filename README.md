@@ -1,76 +1,88 @@
-# ultra-max-quality-youtube-download-bot
+# Ultra Max Quality YouTube Downloader
 
-A Telegram bot that downloads YouTube videos at the **highest available quality**
-(true `bestvideo+bestaudio`, merged with ffmpeg) and sends them straight back to
-you in chat.
+A dead-simple script that downloads YouTube videos at the **highest available
+quality** (best video + best audio, merged into one MP4). Runs on your own PC —
+Windows, macOS, or Linux.
 
-## Features
+## What you need (once)
 
-- 🎬 Downloads the best available video **and** audio stream and merges them to MP4
-- 🔗 Accepts `youtube.com/watch`, `youtu.be`, Shorts, Live, and embed links
-- 📊 Live status messages (looking up → downloading → uploading)
-- 🧹 Cleans up temporary files after every job
-- 🛡️ No secrets in the repo — the token is read from the environment
-- 📦 Optional support for a local Bot API server to bypass the 50 MB upload cap
+1. **Python 3.8+** — install from [python.org](https://www.python.org/downloads/).
+   On Windows, tick **"Add Python to PATH"** during install.
+2. **ffmpeg** — needed to merge the video and audio into one file:
+   - **Windows:** download from [ffmpeg.org](https://ffmpeg.org/download.html) (or run `winget install ffmpeg`)
+   - **macOS:** `brew install ffmpeg`
+   - **Linux:** `sudo apt install ffmpeg`
 
-## Requirements
-
-- **Python 3.10+**
-- **ffmpeg** on your `PATH` (required to merge the separate video/audio streams)
-  - Debian/Ubuntu: `sudo apt install ffmpeg`
-  - macOS: `brew install ffmpeg`
-  - Windows: download from <https://ffmpeg.org/download.html>
-
-## Setup
+## Get the code
 
 ```bash
-# 1. Install Python dependencies
+git clone https://github.com/ahksm/ultra-max-quality-youtube-download-bot.git
+cd ultra-max-quality-youtube-download-bot
+```
+
+(Or click the green **Code** button on GitHub → **Download ZIP** → unzip it.)
+
+## Easiest way to run
+
+The launcher scripts set everything up automatically (virtual environment +
+dependencies) the first time, then run the downloader.
+
+### Windows
+Double-click **`run.bat`**, or from a terminal:
+```bat
+run.bat https://youtu.be/VIDEO_ID
+```
+
+### macOS / Linux
+```bash
+./run.sh https://youtu.be/VIDEO_ID
+```
+(First time only: `chmod +x run.sh` to make it executable.)
+
+Run it with **no URL** and it will simply ask you to paste one.
+
+Your videos are saved to the **`downloads/`** folder.
+
+## Manual way (if you prefer)
+
+```bash
 pip install -r requirements.txt
-
-# 2. Configure your token
-cp .env.example .env
-#   then edit .env and paste your token from @BotFather
-
-# 3. Run it
-python bot.py
+python youtube_download.py https://youtu.be/VIDEO_ID
 ```
 
-## Configuration
+## Options
 
-All configuration is via environment variables (or a `.env` file):
+```text
+python youtube_download.py [URLs...] [options]
 
-| Variable            | Required | Default       | Description                                              |
-| ------------------- | -------- | ------------- | -------------------------------------------------------- |
-| `BOT_TOKEN`         | ✅       | —             | Telegram bot token from [@BotFather](https://t.me/BotFather) |
-| `MAX_UPLOAD_MB`     | ❌       | `50`          | Max file size to upload. Bot API caps this at 50 MB.     |
-| `DOWNLOAD_DIR`      | ❌       | system temp   | Where to store temporary downloads.                      |
-| `TELEGRAM_API_BASE` | ❌       | —             | Base URL of a local Bot API server for large uploads.    |
+  URLs                  One or more YouTube links (any mix of watch / youtu.be /
+                        shorts / playlist links). If omitted, you'll be prompted.
 
-## Usage
+  -o, --output FOLDER   Where to save files (default: ./downloads)
+  --audio-only          Download audio only, saved as MP3
+  -h, --help            Show all options
+```
 
-1. Start a chat with your bot and send `/start`.
-2. Paste any YouTube link.
-3. The bot downloads it at max quality and sends the video back.
-
-## About the 50 MB limit
-
-Telegram's standard Bot API limits bot uploads to **50 MB**. Many max-quality
-videos exceed this. To deliver larger files, run a
-[local Bot API server](https://github.com/tdlib/telegram-bot-api) (which allows
-uploads up to ~2 GB) and point the bot at it:
-
+### Examples
 ```bash
-export TELEGRAM_API_BASE="http://localhost:8081/bot"
-export MAX_UPLOAD_MB=2000
+# Single video at max quality
+python youtube_download.py https://youtu.be/dQw4w9WgXcQ
+
+# Several at once, into a custom folder
+python youtube_download.py URL1 URL2 -o ~/Videos
+
+# Just the audio as MP3
+python youtube_download.py URL --audio-only
 ```
 
-When a download exceeds the limit, the bot tells you instead of failing silently.
+## Troubleshooting
 
-## Security note
-
-Never commit your bot token. It belongs in `.env` (which is git-ignored) or your
-shell environment. If a token is ever exposed, revoke it in @BotFather with
-`/revoke` and generate a new one.
+- **"ffmpeg was not found"** — install ffmpeg (see above) and reopen your terminal.
+- **`HTTP Error 403` / "Sign in to confirm you're not a bot"** — YouTube
+  sometimes blocks downloads from data-center IPs or rate-limits you. This works
+  fine from a normal home connection. If it persists, update yt-dlp
+  (`pip install -U yt-dlp`).
+- **Slow or stuck** — very high-resolution videos (4K/8K) are large; give it time.
 
 ## Legal
 
