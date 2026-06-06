@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Downloaded media
+downloads/
+*.mp4
+*.mkv
+*.webm
+*.m4a
+*.mp3
+*.part
