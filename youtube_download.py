@@ -36,12 +36,12 @@ def ffmpeg_available() -> bool:
     return shutil.which("ffmpeg") is not None
 
 
-def build_options(output_dir: Path, audio_only: bool) -> dict:
+def build_options(output_dir: Path, audio_only: bool, cookies_browser: str | None) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     outtmpl = str(output_dir / "%(title)s [%(id)s].%(ext)s")
 
     if audio_only:
-        return {
+        opts = {
             "format": "bestaudio/best",
             "outtmpl": outtmpl,
             "postprocessors": [
@@ -53,23 +53,31 @@ def build_options(output_dir: Path, audio_only: bool) -> dict:
             ],
             "ignoreerrors": True,
         }
+    else:
+        # bestvideo+bestaudio = the true maximum quality (two separate streams
+        # that ffmpeg merges); fall back to the best single progressive stream.
+        opts = {
+            "format": "bestvideo*+bestaudio/best",
+            "merge_output_format": "mp4",
+            "outtmpl": outtmpl,
+            "concurrent_fragment_downloads": 4,
+            "postprocessors": [
+                {"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"},
+            ],
+            "ignoreerrors": True,
+        }
 
-    # bestvideo+bestaudio = the true maximum quality (two separate streams
-    # that ffmpeg merges); fall back to the best single progressive stream.
-    return {
-        "format": "bestvideo*+bestaudio/best",
-        "merge_output_format": "mp4",
-        "outtmpl": outtmpl,
-        "concurrent_fragment_downloads": 4,
-        "postprocessors": [
-            {"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"},
-        ],
-        "ignoreerrors": True,
-    }
+    # Use sign-in cookies from a browser to get past YouTube's
+    # "confirm you're not a bot" checks (requires being logged into YouTube).
+    if cookies_browser:
+        opts["cookiesfrombrowser"] = (cookies_browser,)
+    return opts
 
 
-def download(urls: list[str], output_dir: Path, audio_only: bool) -> int:
-    opts = build_options(output_dir, audio_only)
+def download(
+    urls: list[str], output_dir: Path, audio_only: bool, cookies_browser: str | None
+) -> int:
+    opts = build_options(output_dir, audio_only, cookies_browser)
     failures = 0
     with yt_dlp.YoutubeDL(opts) as ydl:
         for url in urls:
@@ -107,6 +115,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Download audio only and save as MP3.",
     )
+    parser.add_argument(
+        "--cookies-from-browser",
+        metavar="BROWSER",
+        default=None,
+        help=(
+            "Use sign-in cookies from this browser to bypass YouTube's "
+            "'confirm you're not a bot' check (e.g. chrome, edge, firefox, "
+            "brave). You must be logged into YouTube in that browser."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -137,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     output_dir = Path(args.output).expanduser()
-    failures = download(urls, output_dir, args.audio_only)
+    failures = download(urls, output_dir, args.audio_only, args.cookies_from_browser)
 
     total = len(urls)
     ok = total - failures

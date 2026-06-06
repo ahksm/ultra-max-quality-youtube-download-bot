@@ -71,9 +71,20 @@ These auto-create a virtual environment and install dependencies on first run.
 ## Troubleshooting
 
 - **"Windows protected your PC"** — click **More info → Run anyway** (unsigned app).
-- **`HTTP Error 403` / "Sign in to confirm you're not a bot"** — YouTube can
-  rate-limit or block certain networks. Works fine from a normal home
-  connection; if it persists, grab a fresh build (yt-dlp is updated each build).
+- **"Sign in to confirm you're not a bot"** — YouTube wants you logged in.
+  The app handles this with the **"Sign-in cookies from"** dropdown:
+  1. In your normal browser (Chrome/Edge/Firefox), make sure you're **signed in
+     to youtube.com**.
+  2. Leave the dropdown on **Auto** (it tries your browsers automatically), or
+     pick the exact browser you use.
+  3. If it still fails, **fully close that browser** and try again — Chrome and
+     Edge lock their cookies while open.
+
+  From the command line, use `--cookies-from-browser chrome` (or `edge`,
+  `firefox`, `brave`).
+- **`HTTP Error 403`** — YouTube can rate-limit certain networks. Works fine
+  from a normal home connection; if it persists, grab a fresh build (yt-dlp is
+  updated on every build).
 - **"ffmpeg was not found"** (source mode only) — install ffmpeg and reopen your
   terminal. The .exe already includes ffmpeg.
 

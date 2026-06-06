@@ -36,6 +36,12 @@ except ImportError:
 
 APP_TITLE = "Ultra Max Quality YouTube Downloader"
 
+# Browsers yt-dlp can read sign-in cookies from, tried in this order in "Auto"
+# mode. Cookies let us get past YouTube's "confirm you're not a bot" checks
+# when the user is logged into YouTube in that browser.
+COMMON_BROWSERS = ["chrome", "edge", "brave", "firefox", "opera", "vivaldi", "chromium"]
+BROWSER_CHOICES = ["Auto", "Chrome", "Edge", "Firefox", "Brave", "Opera", "None"]
+
 
 def resource_path(relative: str) -> str:
     """Resolve a path that works both from source and from a PyInstaller bundle."""
@@ -102,11 +108,22 @@ class DownloaderApp:
             row=0, column=1, padx=(8, 0)
         )
 
-        # Options
+        # Options row: audio-only + which browser's sign-in cookies to use.
+        opts_row = ttk.Frame(frm)
+        opts_row.grid(row=4, column=0, columnspan=2, sticky="w")
         self.audio_only_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(
-            frm, text="Audio only (MP3)", variable=self.audio_only_var
-        ).grid(row=4, column=0, sticky="w")
+            opts_row, text="Audio only (MP3)", variable=self.audio_only_var
+        ).pack(side="left")
+        ttk.Label(opts_row, text="     Sign-in cookies from:").pack(side="left")
+        self.browser_var = tk.StringVar(value="Auto")
+        ttk.Combobox(
+            opts_row,
+            textvariable=self.browser_var,
+            values=BROWSER_CHOICES,
+            width=9,
+            state="readonly",
+        ).pack(side="left", padx=(4, 0))
 
         # Download button
         self.download_btn = ttk.Button(
@@ -141,49 +158,99 @@ class DownloaderApp:
 
         thread = threading.Thread(
             target=self._worker,
-            args=(url, folder, self.audio_only_var.get()),
+            args=(url, folder, self.audio_only_var.get(), self.browser_var.get()),
             daemon=True,
         )
         thread.start()
 
-    def _worker(self, url: str, folder: str, audio_only: bool) -> None:
+    def _base_opts(self, folder: str, audio_only: bool) -> dict:
+        outtmpl = os.path.join(folder, "%(title)s [%(id)s].%(ext)s")
+        if audio_only:
+            opts = {
+                "format": "bestaudio/best",
+                "outtmpl": outtmpl,
+                "postprocessors": [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "0",
+                    }
+                ],
+            }
+        else:
+            opts = {
+                "format": "bestvideo*+bestaudio/best",
+                "merge_output_format": "mp4",
+                "outtmpl": outtmpl,
+                "concurrent_fragment_downloads": 4,
+                "postprocessors": [
+                    {"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}
+                ],
+            }
+        opts["progress_hooks"] = [self._progress_hook]
+        opts["quiet"] = True
+        opts["no_warnings"] = True
+        if self.ffmpeg_dir:
+            opts["ffmpeg_location"] = self.ffmpeg_dir
+        return opts
+
+    def _attempt(self, url: str, folder: str, audio_only: bool, browser: str | None) -> None:
+        """One download attempt. Raises yt_dlp.utils.DownloadError on failure."""
+        opts = self._base_opts(folder, audio_only)
+        if browser:
+            opts["cookiesfrombrowser"] = (browser,)
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.download([url])
+
+    @staticmethod
+    def _looks_like_bot_block(err: str) -> bool:
+        err = err.lower()
+        return any(
+            s in err
+            for s in ("sign in to confirm", "not a bot", "cookie", "login required")
+        )
+
+    def _worker(self, url: str, folder: str, audio_only: bool, browser_choice: str) -> None:
         try:
             Path(folder).mkdir(parents=True, exist_ok=True)
-            outtmpl = os.path.join(folder, "%(title)s [%(id)s].%(ext)s")
 
-            if audio_only:
-                opts = {
-                    "format": "bestaudio/best",
-                    "outtmpl": outtmpl,
-                    "postprocessors": [
-                        {
-                            "key": "FFmpegExtractAudio",
-                            "preferredcodec": "mp3",
-                            "preferredquality": "0",
-                        }
-                    ],
-                }
+            # Decide which cookie sources to try, in order.
+            if browser_choice == "None":
+                attempts: list[str | None] = [None]
+            elif browser_choice == "Auto":
+                # Try without cookies first (fast, works for most videos), then
+                # fall back to each installed browser's sign-in cookies.
+                attempts = [None] + COMMON_BROWSERS
             else:
-                opts = {
-                    "format": "bestvideo*+bestaudio/best",
-                    "merge_output_format": "mp4",
-                    "outtmpl": outtmpl,
-                    "concurrent_fragment_downloads": 4,
-                    "postprocessors": [
-                        {"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}
-                    ],
-                }
+                attempts = [browser_choice.lower()]
 
-            opts["progress_hooks"] = [self._progress_hook]
-            opts["quiet"] = True
-            opts["no_warnings"] = True
-            if self.ffmpeg_dir:
-                opts["ffmpeg_location"] = self.ffmpeg_dir
+            last_err = "Unknown error."
+            for browser in attempts:
+                if browser:
+                    self.queue.put(
+                        ("status", f"Retrying with {browser.title()} sign-in cookies…")
+                    )
+                try:
+                    self._attempt(url, folder, audio_only, browser)
+                    self.queue.put(("done", True, folder))
+                    return
+                except Exception as exc:  # noqa: BLE001
+                    last_err = str(exc)
+                    # In Auto mode, only keep trying browsers if this looks like a
+                    # bot/sign-in block (or a browser whose cookies we couldn't
+                    # read). For anything else (bad URL, etc.), stop now.
+                    if browser_choice == "Auto":
+                        msg = last_err.lower()
+                        keep_going = (
+                            self._looks_like_bot_block(last_err)
+                            or "could not" in msg  # cookies not found for that browser
+                            or "unable to" in msg
+                        )
+                        if not keep_going:
+                            break
+                        continue
 
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                ydl.download([url])
-
-            self.queue.put(("done", True, folder))
+            self.queue.put(("done", False, last_err))
         except Exception as exc:  # noqa: BLE001
             self.queue.put(("done", False, str(exc)))
 
@@ -205,7 +272,9 @@ class DownloaderApp:
             while True:
                 msg = self.queue.get_nowait()
                 kind = msg[0]
-                if kind == "progress":
+                if kind == "status":
+                    self.status_var.set(msg[1])
+                elif kind == "progress":
                     _, percent, text = msg
                     self.progress.config(value=percent)
                     self.status_var.set(text)
@@ -220,12 +289,29 @@ class DownloaderApp:
                         )
                     else:
                         self.progress.config(value=0)
-                        self.status_var.set("❌ Something went wrong.")
-                        messagebox.showerror(
-                            APP_TITLE,
-                            "Could not download that video.\n\n"
-                            f"Details:\n{info}",
-                        )
+                        if self._looks_like_bot_block(info):
+                            self.status_var.set("❌ YouTube asked to confirm you're not a bot.")
+                            messagebox.showerror(
+                                APP_TITLE,
+                                "YouTube blocked this download with a "
+                                "\"confirm you're not a bot\" check.\n\n"
+                                "How to fix it:\n"
+                                "1. Open your normal web browser (Chrome, Edge, "
+                                "or Firefox) and make sure you're SIGNED IN to "
+                                "youtube.com.\n"
+                                "2. Set \"Sign-in cookies from\" to that browser "
+                                "(or leave it on Auto).\n"
+                                "3. If it still fails, fully CLOSE that browser "
+                                "and try again — Chrome/Edge lock their cookies "
+                                "while open.\n",
+                            )
+                        else:
+                            self.status_var.set("❌ Something went wrong.")
+                            messagebox.showerror(
+                                APP_TITLE,
+                                "Could not download that video.\n\n"
+                                f"Details:\n{info}",
+                            )
         except queue.Empty:
             pass
         self.root.after(100, self._poll_queue)
