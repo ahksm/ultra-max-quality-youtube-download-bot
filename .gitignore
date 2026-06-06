@@ -1,0 +1,18 @@
+# Secrets / local config
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Downloads / temp media
+downloads/
+*.mp4
+*.mkv
+*.webm
+*.m4a
+*.part
